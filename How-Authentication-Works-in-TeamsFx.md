@@ -71,7 +71,7 @@ When getting token flow is triggered, Teams SDK will first try to use msal to ch
 
 
 ## How On-Behalf-Of flow works in Teams Tab with Azure Function backend
-If your Teams Tab App has an backend service such as Azure Function application, and you want to access current user information protected by Azure Active Directory in backend service, for example, if your Azure Function needs to call Microsoft Graph APIs to obtain a user's profile photo, then you need to authenticate the user with On-Behalf-Of flow to retrieve the appropriate authentication tokens.
+If your Teams Tab App has an backend service such as Azure Function application, and you want to access current user information protected by Azure Active Directory in backend service, for example, if your Azure Function needs to call Microsoft Graph APIs to obtain a user's profile photo, then you need to authenticate the user with [On-Behalf-Of flow](https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-on-behalf-of-flow) to retrieve the appropriate authentication tokens.
 
 The sequence chart below shows how the On-Behalf-Of flow works in a Teams Tab app.
 
@@ -139,7 +139,7 @@ Step 6: Azure Function send back result to Teams Tab
     ```
 
 ## How client credentials flow (application credential) works in Teams Tab with Azure Function backend
-In the client credentials flow, permissions are granted directly to the application itself by an administrator. When the app presents a token to a resource, the resource enforces that the app itself has authorization to perform an action since there is no user involved in the authentication.
+In the [client credentials flow](https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow), permissions are granted directly to the application itself by an administrator. When the app presents a token to a resource, the resource enforces that the app itself has authorization to perform an action since there is no user involved in the authentication.
 
 
 The entire client credentials flow looks similar to the following diagram as below:

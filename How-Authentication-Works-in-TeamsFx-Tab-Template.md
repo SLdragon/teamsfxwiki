@@ -1,42 +1,43 @@
->Note
-* This documentation applies to Teams Toolkit version >= 3.3.0, TeamsFx CLI version >= 0.11.0 and TeamsFx SDK version >= 0.5.0.
-* If you are facing errors with old project templates created by Teams Toolkit or older TeamsFx SDK version, please go to the [Migrate](#migrate) or [FAQ](#faq) for solutions.
+>Note: This documentation applies to TeamsFx SDK version >= 2.0.0.
 
 ## Overview
 
 A typical Teams tab application usually needs to obtain a currently logged-in user identity to build a single sign-on experience for the application user. To access user information protected by Azure Active Directory and to access data from services like Facebook and Twitter, the application needs to establish a trusted connection with those providers. For example, if your application is calling Microsoft Graph APIs to obtain a user's profile photo, you need to authenticate the user to retrieve the appropriate authentication tokens.
 
-Microsoft Teams provides a general [authentication flow](https://docs.microsoft.com/en-us/microsoftteams/platform/tabs/how-to/authentication/auth-flow-tab) for Teams Tab applications to log in users. The sequence chart below shows how the authentication flow works in a Teams Tab app.
+## How auth code flow works in pure Teams Tab application
+
+In the pure Teams Tab template application created by Teams Toolkit, we leverage the [AAD Auth Code Flow](https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow) as the authentication mechanism to provide user login experience in Teams Tab apps. The template provides a simple Teams Tab that can get user login information.
+
+
+The sequence chart below shows how the authentication flow works in a pure Teams Tab app.
+
 
 ![sequence chart](https://docs.microsoft.com/en-us/microsoftteams/platform/assets/images/authentication/tab_auth_sequence_diagram.png)
 
+> Latest TeamsFx SDK uses [msal-browser](https://www.npmjs.com/package/@azure/msal-browser) for Auth Code Flow with PKCE authentication. 
 
-## How authentication flow works in Teams Tab application
 
-In the Tab application template created by Teams Toolkit, we leverage the [AAD Auth Code Flow](https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow) as the authentication mechanism to provide user login experience in Teams Tab apps. The template provides a simple Teams Tab that can get user login information.
 
-Latest TeamsFx SDK uses [msal-browser](https://www.npmjs.com/package/@azure/msal-browser) for Auth Code Flow with PKCE authentication. 
+### Use TeamsFx SDK for Auth Code flow with PKCE
 
-### The Login Flow
+1. In the Teams Tab app, add the following code to trigger the login flow: 
+    ```ts
+    const authConfig: TeamsUserCredentialAuthConfig = {
+      clientId: process.env.REACT_APP_CLIENT_ID!,
+      initiateLoginEndpoint: process.env.REACT_APP_START_LOGIN_PAGE_URL!,
+    };
 
-1. In the Teams Tab app, add the following code to trigger the login flow: `await credential.login(scope);`
-> Note
-* You need to add the following code to create a new TeamsUserCredential instance: `const credential = new TeamsUserCredential();`
-* Due to the [limitation](https://docs.microsoft.com/en-us/azure/active-directory/develop/msal-js-initializing-client-applications#single-instance-and-configuration) of msal, multiple instances of `TeamsUserCredential` is not recommended.
+    const teamsUserCredential = new TeamsUserCredential(authConfig);
 
-2. TeamsFx SDK will pop up a window and navigate to auth-start.html under `tabs/public` in your project. 
-TeamsFx SDK will by default read `REACT_APP_START_LOGIN_PAGE_URL` from env as the endpoint of auth-start.html. You can customize your endpoint by updating `initiateLoginEndpoint` under `authentication` in `loadConfiguration()` in [useTeamsFx.js](https://github.com/OfficeDev/TeamsFx/blob/main/templates/tab/js/default/src/components/sample/lib/useTeamsFx.js) or [useTeamsFx.ts](https://github.com/OfficeDev/TeamsFx/blob/main/templates/tab/ts/default/src/components/sample/lib/useTeamsFx.ts). 
-For example:
-      ```
-      loadConfiguration({
-        authentication: {
-          initiateLoginEndpoint: your-auth-start-page,
-          clientId: clientId,
-        },
-        ...
-      });
-      ```
-      
+    // Put the login code below in a call-to-action callback function to avoid browser blocking automatically showing up pop-ups.
+    const scope = ["User.Read"];
+    await teamsUserCredential.login(scope);
+    ```
+
+    > Note: Due to the [limitation](https://docs.microsoft.com/en-us/azure/active-directory/develop/msal-js-initializing-client-applications#single-instance-and-configuration) of msal, multiple instances of `TeamsUserCredential` is not recommended.
+
+2. When `teamsUserCredential.login` function is triggered, TeamsFx SDK would pop up a window and navigate to auth-start.html under `tabs/public` in your project. The above code would read `REACT_APP_START_LOGIN_PAGE_URL` from env as the endpoint of auth-start.html. You can customize your endpoint by updating `initiateLoginEndpoint` of `authConfig`.
+    
 3. In auth-start.html, will navigate to AAD login page using [msal](https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/login-user.md#login-the-user).
 You can find the template of auth-start.html [here](https://github.com/OfficeDev/TeamsFx/blob/main/templates/tab/js/default/public/auth-start.html) for JavaScript and [here](https://github.com/OfficeDev/TeamsFx/blob/main/templates/tab/ts/default/public/auth-start.html) for TypeScript.
 
@@ -56,101 +57,118 @@ You can find the template of auth-end.html [here](https://github.com/OfficeDev/T
       * If the response is empty or can not parse to JSON object, will return error.
       * If "code" exists in the response, will return error. You can check [here](#how-to-solve-the-error-found-auth-code-in-response-auth-code-is-not-support-for-current-version-of-sdk) for detail.
       * If "sessionStorage" exists in the response, will set the key value pairs to the session storage.
-After this, the login flow has been completed. You can call the following command to get the graph client: `const graph = createMicrosoftGraphClient(credential, scope);`
+
+
+6. After this, the login flow has been completed. You can use the following code to call Graph API: 
+    ```ts
+    const graphClient = createMicrosoftGraphClientWithCredential(teamsUserCredential, ["User.Read"]); 
+    const profile = await graphClient.api("/me").get();
+    ```
 
 ### Get Token Flow
 When getting token flow is triggered, Teams SDK will first try to use msal to check whether Access Token exists in session storage. Here msal will handle the scenario that the token exists and is expired. If succeeded, return Access Token. If failed to get Access Token from session storage, Teams SDK will try to use msal to launch silent SSO. If succeeded, return Access Token. If failed in silent SSO, you need to trigger the login flow to get Access Token.
 
-## How to migrate from SDK version earlier than 0.5.0 to latest SDK
 
-If you are working on an existing project and want to use the latest SDK, please follow the steps below to migrate your project.
 
-*Existing projects are supported by New Teams Toolkit and TeamsFx CLI.*
+## How On-Behalf-Of flow works in Teams Tab with Azure Function backend
+If your Teams Tab App has an backend service such as Azure Function application, and you want to access current user information protected by Azure Active Directory in backend service, for example, if your Azure Function needs to call Microsoft Graph APIs to obtain a user's profile photo, then you need to authenticate the user with On-Behalf-Of flow to retrieve the appropriate authentication tokens.
 
-1. Install the latest Teams Toolkit or TeamsFx CLI.
+The sequence chart below shows how the On-Behalf-Of flow works in a Teams Tab app.
 
-2. Remove Simple Auth Plugin from Active Plugins
-Open `.fx/projectSettings.json`, remove `fx-resource-simple-auth` from `activeResourcePlugins` under `solutionSettings`.
+![sequence chart](./auth/obo-flow.png)
 
-3. Update SDK version.
-Open a terminal, navigate to `/tabs` and execute: `npm install @microsoft/teamsfx@latest`
+Step 1: Teams Tab App sends request with SSO token in header to Azure Function backend
 
-4. Update auth-start.html and auth-end.html.
-    * Locate the new OAuth prompt page:
-      * For JavaScript: [auth-start.html](https://github.com/OfficeDev/TeamsFx/blob/main/templates/tab/js/default/public/auth-start.html) and [auth-end.html](https://github.com/OfficeDev/TeamsFx/blob/main/templates/tab/js/default/public/auth-end.html).
-      * For TypeScript: [auth-start.html](https://github.com/OfficeDev/TeamsFx/blob/main/templates/tab/ts/default/public/auth-start.html) and [auth-end.html](https://github.com/OfficeDev/TeamsFx/blob/main/templates/tab/ts/default/public/auth-end.html).
-    * Open `tabs/public`, replace current `auth-start.html` and `auth-end.html` with the new OAuth prompt page.
+Step 2,3: Azure Function calls Azure AD use OBO flow to exchange access token for Graph API
 
-5. Update `loadConfiguration()` method.
-    * Open the file with `loadConfiguration()` method. The default path is:
-      * For JavaScript: `tab/src/component/sample/lib/useTeamsFx.js`
-      * For TypeScript: `tab/src/component/sample/lib/useTeamsFx.ts`
-    * Remove the following line:
-      ```
-      simpleAuthEndpoint: process.env.REACT_APP_TEAMSFX_ENDPOINT,
-      ```
+Step 4,5: Azure Function use access token to call Graph API
 
-6. Remove Simple Auth bicep files and resources
-    * Remove `templates/azure/provision/simpleAuth.bicep`
-    * Remove `templates/azure/teamsFx/simpleAuth.bicep`
-    * Remove the following lines from `templates/azure/provision.bicep`:
-        ```
-        // Resources for Simple Auth
-        module simpleAuthProvision './provision/simpleAuth.bicep' = {
-          name: 'simpleAuthProvision'
-          params: {
-            provisionParameters: provisionParameters
-            userAssignedIdentityId: userAssignedIdentityProvision.outputs.identityResourceId
-          }
-        }
+Step 6: Azure Function send back result to Teams Tab
 
-        output simpleAuthOutput object = {
-          teamsFxPluginId: 'fx-resource-simple-auth'
-          endpoint: simpleAuthProvision.outputs.endpoint
-          webAppResourceId: simpleAuthProvision.outputs.webAppResourceId
-        }
-        ```
-    * Remove the following lines from `templates/azure/config.bicep`:
-        ```
-        var simpleAuthCurrentAppSettings = list('${provisionOutputs.simpleAuthOutput.value.webAppResourceId}/config/appsettings', '2021-02-01').properties
 
-        module teamsFxSimpleAuthConfig './teamsFx/simpleAuth.bicep' = {
-          name: 'addTeamsFxSimpleAuthConfiguration'
-          params: {
-            provisionParameters: provisionParameters
-            provisionOutputs: provisionOutputs
-            currentAppSettings: simpleAuthCurrentAppSettings
-          }
-        }
-        ```
-    * If the project has been provisioned, please follow the steps to remove Simple Auth Service for all environments:
-      * Open `.fx/states.${environment name}.json`, note the value of `resourceGroupName` which is the resource group name.
-      * Open Azure Portal and find the resource group according to the resource group name noted in the previous step.
-      * Delete the App Service and App Service Plan with suffix `simpleAuth`.
-        
-        *Note: If you have customized the name of your app service or app service plan, please delete the corresponding resource.*
+> Latest TeamsFx SDK uses [msal-node](https://www.npmjs.com/package/@azure/msal-node) for On-Behalf-Of flow authentication.
 
-7. Remove `teamsfx: auth start` task from `task.json`
-    * Open `.vscode/task.json` and remove the following line:
-      ```
-      "teamsfx: auth start"
-      ```
+### Use TeamsFx SDK for On-Behalf-Of flow
+1. To call Azure Function to get user information, the Teams Tab client sends an HTTP request with an SSO token in the `Authorization` header. The token can be retrieved using the TeamsFx SDK from your app's client (custom tab). Below is an example:
 
-8.  To deploy your changes to Azure, you need to provision and deploy your project. For local debug, you can run local debug directly. After that, the app should work using Auth Code Flow with PKCE.
-During provision or local debug, Teams Toolkit or TeamsFx CLI will add a new type "Single Page Application" to the Redirect URI of your Azure AD app. The Redirect URI of the type will be:
+  ```ts
+  const authConfig: TeamsUserCredentialAuthConfig = {
+    clientId: process.env.REACT_APP_CLIENT_ID!,
+    initiateLoginEndpoint: process.env.REACT_APP_START_LOGIN_PAGE_URL!,
+  };
+
+  const teamsUserCredential = new TeamsUserCredential(authConfig);
+  const accessToken = await teamsUserCredential.getToken("");
+
+  // note: empty string argument on the previous line is required for now, this will be fixed in a later release
+  const response = await fetch(`${functionEndpoint}/api/${functionName}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken.token}`,
+    },
+  });
+  ```
+
+2. In the Azure Function app,  use `OnBehalfOfUserCredential` to call Graph API for current user using `ssoToken` retrieved from request header as below:
+
+    ```ts
+    const authConfig: OnBehalfOfCredentialAuthConfig = {
+      authorityHost: config.authorityHost,
+      tenantId: config.tenantId,
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+    };
+    let credential = new OnBehalfOfUserCredential(ssoToken, authConfig);
+
+    const graphClient: Client = createMicrosoftGraphClientWithCredential(credential, [".default"]);
+    const profile: any = await graphClient.api("/me").get();
     ```
-    ${frontendEndpoint}/blank-auth-end.html
-    ${frontendEndpoint}/auth-end.html?clientId=${clientId}
+    > Note: `ssoToken` is retrieved from request header
+
+3. When Graph API is called, if user doesn't consent before, it will throw error. Then Teams Tab app needs to show login button and ask user to consent the permission as below:
+    ```ts
+    const authConfig: TeamsUserCredentialAuthConfig = {
+      clientId: process.env.REACT_APP_CLIENT_ID!,
+      initiateLoginEndpoint: process.env.REACT_APP_START_LOGIN_PAGE_URL!,
+    };
+
+    const teamsUserCredential = new TeamsUserCredential(authConfig);
+
+    // Put the login code below in a call-to-action callback function to avoid browser blocking automatically showing up pop-ups.
+    const scope = ["User.Read"];
+    await teamsUserCredential.login(scope);
     ```
 
-## FAQ
+## How client credentials flow (application credential) works in Teams Tab with Azure Function backend
+In the client credentials flow, permissions are granted directly to the application itself by an administrator. When the app presents a token to a resource, the resource enforces that the app itself has authorization to perform an action since there is no user involved in the authentication.
 
-#### How to solve the error: "Found auth code in response. Auth code is not supported for the current version of SDK.".
-This error may occur when you are working with a project created using Teams Toolkit 3.3.0 or later on a project that does not use Auth Code Flow with PKCE. Perhaps the project is created by an earlier version of Teams Toolkit. Please refer to [Migrate](#migrate) for how to update your project, or you can simply downgrade your SDK version to `^0.4.0`.
 
-#### How to solve the error: "If you see "AADSTS50011: The reply URL specified in the request does not match the reply URLs configured for the application", in the popup window, you may be using an unmatched version for TeamsFx SDK (version >= 0.5.0) and Teams Toolkit (version < 3.3.0) or TeamsFx CLI (version < 0.11.0)."
+The entire client credentials flow looks similar to the following diagram as below:
 
-This error may occur when you are using Teams Toolkit version earlier than 3.3.0 or TeamsFx CLI version earlier than 0.11.0 to provision a project created by Teams Toolkit 3.3.0 or later which is using SDK 0.5.0 or later. You need to upgrade your Teams Toolkit or TeamsFx CLI to the latest version. Provision the project again before you run the app.
+![client credentials flow](./auth/client-credential-flow.png)
 
-#### How to solve the error: "simpleAuthEndpoint in configuration is invalid".
-This error may occur when you are using the TeamsFx SDK version earlier than 0.5.0 on an up-to-date project created by Teams Toolkit version 3.3.0 or later. You need to upgrade the SDK version to >= 0.5.0.
+> Latest TeamsFx SDK uses [msal-node](https://www.npmjs.com/package/@azure/msal-node) for On-Behalf-Of flow authentication.
+
+
+### Use TeamsFx SDK for client credentials flow
+1. Grant application permission in the AAD application follow this [link](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-configure-app-access-web-apis#application-permission-to-microsoft-graph).
+
+2. After permissions are granted, then in the Azure Function, use `AppCredential` in TeamsFx SDK to call Graph API as below:
+
+  ```ts
+  const appAuthConfig: AppCredentialAuthConfig = {
+    authorityHost: process.env.M365_AUTHORITY_HOST,
+    clientId: process.env.M365_CLIENT_ID,
+    tenantId: process.env.M365_TENANT_ID,
+    clientSecret: process.env.M365_CLIENT_SECRET,
+  };
+
+  const appCredential = new AppCredential(appAuthConfig);
+  const graphClient: Client = createMicrosoftGraphClientWithCredential(appCredential, [".default"]);
+  const profile: any = await graphClient.api("/users/" + userName).get();
+  ```
+
+
+## References
+- This sample demonstrate auth flows using TeamsFx SDK: [Hello World Tab with Backend Sample](https://github.com/OfficeDev/TeamsFx-Samples/tree/dev/hello-world-tab-with-backend)
+
+- [TeamsFx SDK document](https://learn.microsoft.com/en-us/microsoftteams/platform/toolkit/teamsfx-sdk)

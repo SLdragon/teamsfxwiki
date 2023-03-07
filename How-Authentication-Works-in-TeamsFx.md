@@ -4,12 +4,12 @@
 
 A typical Teams tab application usually needs to obtain a currently logged-in user identity to build a single sign-on experience for the application user. To access user information protected by Azure Active Directory and to access data from services like Facebook and Twitter, the application needs to establish a trusted connection with those providers. For example, if your application is calling Microsoft Graph APIs to obtain a user's profile photo, you need to authenticate the user to retrieve the appropriate authentication tokens.
 
-## How auth code flow works in pure Teams Tab application
+## How auth code flow works in a frontend only Teams Tab application
 
-In the pure Teams Tab template application created by Teams Toolkit, we leverage the [AAD Auth Code Flow](https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow) as the authentication mechanism to provide user login experience in Teams Tab apps. The template provides a simple Teams Tab that can get user login information.
+frontend only Teams Tab application created by Teams Toolkit, we leverage the [AAD Auth Code Flow](https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow) as the authentication mechanism to provide user login experience in Teams Tab apps. The template provides a simple Teams Tab that can get user login information.
 
 
-The sequence chart below shows how the authentication flow works in a pure Teams Tab app.
+The sequence chart below shows how the authentication flow works in a frontend only Teams Tab application.
 
 
 ![sequence chart](https://docs.microsoft.com/en-us/microsoftteams/platform/assets/images/authentication/tab_auth_sequence_diagram.png)
